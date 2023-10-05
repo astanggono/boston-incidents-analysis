@@ -1,0 +1,586 @@
+---
+title: "5205 Final Code"
+output: html_document
+date: "2023-04-27"
+---
+
+
+```{r}
+df = read.csv('/Users/AstaAnggono/Desktop/Boston Incidents.csv')
+```
+
+
+
+
+Research Question 1:How does the month of year, day of week, and hour of day affect the incident rate in Boston? 
+```{r}
+#library(ggplot2);library(ggthemes);library(gridExtra)  # For plots 
+#library(quantmod);library(xts);library(zoo) # For using xts class objects
+#library(forecast) # Set of forecasting functions
+#library(fpp); library(fpp2) # Datasets from Forecasting text by Rob Hyndman
+#library(tseries) # for a statistical test
+#library(dplyr) # Data wrangling
+```
+
+```{r}
+df$DATE <- as.Date(df$DATE)
+df <- df[complete.cases(df$DATE ), ]
+rownames(df) <- seq(nrow(df))
+head(df)
+df2 <- cbind(original_row_names = row.names(df), df)
+head(df2)
+```
+
+```{r}
+#crime numbers for month of years
+df$DATE2 <- format(df$DATE, "%Y-%m")
+head(df)
+monthly_crime <- df %>%
+  group_by(DATE2) %>%
+  summarise(total_incidents = n())
+
+monthly_crime  
+```
+
+```{r}
+#library(xts)
+#library(lubridate)
+monthly_crime_xts <- xts(monthly_crime$total_incidents, order.by = as.yearmon(monthly_crime$DATE2))
+monthly_crime_xts
+monthly_ts <- as.ts(monthly_crime_xts, start = c(year(start(monthly_crime_xts)), month(start(monthly_crime_xts))))
+start(monthly_ts)
+end(monthly_ts)
+```
+
+```{r}
+#plot by month of years
+monthly_ts %>%
+  autoplot()
+```
+
+```{r}
+#seasonal plot by month of years
+ggseasonplot(monthly_ts)
+```
+
+```{r}
+agg_bostoncrime <- df2 %>%
+  group_by(DATE) %>%
+  summarize(total_occurrences = n())
+head(agg_bostoncrime)
+```
+
+
+```{r}
+#crime numbers for hour of day 
+summary(df2)
+df2$TimeOfDay <- ifelse(df2$HOUR >= 8 & df2$HOUR <= 20, "Day", "Night")
+```
+
+```{r}
+agg_bostoncrime_daynight <- df2 %>%
+  group_by(TimeOfDay) %>%
+  summarize(total_occurrences = n())
+head(agg_bostoncrime_daynight)
+```
+
+```{r}
+agg_bostoncrime$dayofweek <-weekdays(agg_bostoncrime$DATE)
+agg_bostoncrime
+```
+
+```{r}
+#crime numbers for day of weeks
+agg_bostoncrime2<-agg_bostoncrime%>%
+  group_by(dayofweek)%>%
+  summarize(sum(total_occurrences))
+agg_bostoncrime2
+names(agg_bostoncrime2) <- c("DayOfWeek", "TotalOccurrences")
+agg_bostoncrime2
+```
+
+```{r}
+#library(ggplot2)
+ggplot(agg_bostoncrime2, aes(x = DayOfWeek, y = TotalOccurrences)) + 
+  geom_bar(stat = "identity")+
+  xlab('Day of the week') +
+  ylab("Total") +
+  ggtitle("Total occurrences by day of the week")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+Research Question 2: Is there a clear trend or seasonal change in the number of incidents and the number of shootings over the past few years?  Is there any significant changes on specific dates (e.g., holidays, hot events, etc.) ?
+
+```{r}
+#re-read the dataset
+df = read.csv('/Users/wushuyan/Desktop/Boston Incidents.csv')
+nrow(df)
+```
+
+
+```{r}
+unique(df$SHOOTING)
+```
+
+```{r}
+# Create a column values for column 'Shooting'
+df$SHOOTING_OR_NO <- ifelse(df$SHOOTING == "Shooting reported", 1, 0)
+```
+
+```{r}
+sum(df$SHOOTING_OR_NO)
+```
+
+
+```{r}
+#library(ggplot2);library(ggthemes);library(gridExtra)  # For plots 
+#library(quantmod);library(xts);library(zoo) # For using xts class objects
+#library(forecast) # Set of forecasting functions
+#library(fpp); library(fpp2) # Datasets from Forecasting text by Rob Hyndman
+#library(tseries) # for a statistical test
+#library(dplyr) # Data wrangling
+```
+
+
+```{r}
+df$DATE <- as.Date(df$DATE)
+```
+
+```{r}
+grouped_df <- df %>%
+  group_by(DATE) %>%
+  summarize(Crime_Count = n(), Shooting_Count = sum(SHOOTING_OR_NO))
+```
+
+```{r}
+head(grouped_df)
+```
+
+```{r}
+grouped_df$DATE <- as.Date(trimws(grouped_df$DATE), format = "%Y-%m-%d")
+nrow(grouped_df)
+sum(is.na(grouped_df$DATE))
+which(is.na(grouped_df$DATE))
+grouped_df[which(is.na(grouped_df$DATE)), ]
+complete_rows <- complete.cases(grouped_df$DATE)
+grouped_df <- grouped_df[complete_rows, ]
+nrow(grouped_df)
+ts <- data.frame(DATE = seq(min(grouped_df$DATE), max(grouped_df$DATE), by = "day"))
+```
+
+```{r}
+#see monthly average incident count over time
+#library(lubridate)
+grouped_df %>%
+  mutate(DATE = as.POSIXct(DATE, format = "%Y-%m-%d %H:%M:%S")) %>%
+  mutate(month = floor_date(DATE, "month")) %>%
+  group_by(month) %>%
+  summarize(avg_Crime_Count = mean(Crime_Count)) %>%
+  ggplot(aes(x = month)) +
+  geom_line(aes(y = avg_Crime_Count, color = "avg_Crime_Count")) +
+  scale_color_manual(values = c("avg_Crime_Count" = "blue")) +
+  labs(x = "Month",
+       y = "Average Crime Cases Count",
+       color = "Event Type",
+       title = "Monthly Averages of Incidents")
+```
+
+```{r}
+#see monthly average incident count with shooting reported over time
+#library(lubridate)
+grouped_df %>%
+  mutate(DATE = as.POSIXct(DATE, format = "%Y-%m-%d %H:%M:%S")) %>%
+  mutate(month = floor_date(DATE, "month")) %>%
+  group_by(month) %>%
+  summarize(avg_Shooting_Count = mean(Shooting_Count)) %>%
+  ggplot(aes(x = month)) +
+  geom_line(aes(y = avg_Shooting_Count, color = "avg_Shooting_Count")) +
+  scale_color_manual(values = c("avg_Shooting_Count" = "red")) +
+  labs(x = "Month",
+       y = "Average Shooting Cases Count",
+       color = "Event Type",
+       title = "Monthly Averages of Shootings")
+```
+
+```{r}
+#library(tidyverse)
+
+# create a new column for the year and month
+grouped_df <- grouped_df %>% 
+  mutate(year_month = floor_date(DATE, unit = "month"))
+grouped_df
+
+# get the starting and ending dates
+start_date <- as.Date(paste(year(min(grouped_df$DATE)), month(min(grouped_df$DATE)), "01", sep = "-"))
+end_date <- as.Date(paste(year(max(grouped_df$DATE)), month(max(grouped_df$DATE)), "01", sep = "-")) + months(1) - days(1)
+
+# calculate monthly sums for Shooting cases
+monthly_count_Shooting <- grouped_df %>% 
+  mutate(year_month = format(DATE, "%Y-%m")) %>% 
+  group_by(year_month) %>% 
+  summarize(Shooting_Count = sum(Shooting_Count)) %>% 
+  ungroup() %>% 
+  pull(Shooting_Count)
+  
+# create the time series data for Shooting Count
+ts_df_Shooting <- ts(monthly_count_Shooting, start = c(year(start_date), month(start_date)), end = c(year(end_date), month(end_date)), frequency = 12)
+start(ts_df_Shooting)
+end(ts_df_Shooting)
+
+# calculate monthly sums for Crime cases
+monthly_count_Crime <- grouped_df %>% 
+  mutate(year_month = format(DATE, "%Y-%m")) %>% 
+  group_by(year_month) %>% 
+  summarize(Crime_Count = sum(Crime_Count)) %>% 
+  ungroup() %>% 
+  pull(Crime_Count)
+
+# create the time series data for Crime Count
+ts_df_Crime <- ts(monthly_count_Crime, start = c(year(start_date), month(start_date)), end = c(year(end_date), month(end_date)), frequency = 12)
+start(ts_df_Crime)
+end(ts_df_Crime)
+
+```
+
+```{r}
+ts_df_Shooting
+```
+
+```{r}
+plot(ts_df_Shooting)
+```
+
+```{r}
+ts_df_Crime
+```
+
+```{r}
+plot(ts_df_Crime)
+```
+
+```{r}
+ts_df_Shooting%>%
+  stl(s.window = 'periodic')%>%
+  autoplot()
+```
+
+```{r}
+ts_df_Crime%>%
+  stl(s.window = 'periodic')%>%
+  autoplot()
+```
+
+
+
+To see if there's any significant change of Incident occurrences and Shooting incidents occurrences on Holidays
+We define Holidays as
+#Independence Day
+#Labor Day
+#martin luther king day
+#Halloween
+#Thansgiving
+#Christmas
+#New Year's Eve
+```{r}
+holidays <- c("2015-07-04", "2015-09-07", "2015-11-26", "2015-10-31", "2015-12-24", "2015-12-25", "2015-12-26", "2015-12-31", 
+              "2016-01-18", "2016-07-04", "2016-09-05", "2016-11-24", "2016-10-31", "2016-12-24", "2016-12-25", "2016-12-26", "2016-12-31", 
+              "2017-01-16", "2017-07-04", "2017-09-04", "2017-11-23", "2017-10-31", "2017-12-24", "2017-12-25", "2017-12-26", "2017-12-31", 
+              "2018-01-15", "2018-07-04", "2018-09-03", "2018-11-22", "2018-10-31", "2018-12-24", "2018-12-25", "2018-12-26", "2018-12-31", 
+              "2019-01-21", "2019-07-04", "2019-09-02", "2019-11-28", "2019-10-31", "2019-12-24", "2019-12-25", "2019-12-26", "2019-12-31", 
+              "2020-01-20", "2020-07-04", "2020-09-07", "2020-11-26", "2020-10-31", "2020-12-24", "2020-12-25", "2020-12-26", "2020-12-31", 
+              "2021-01-18", "2021-07-04", "2021-09-06", "2021-11-25", "2021-10-31", "2021-12-24", "2021-12-25", "2021-12-26", "2021-12-31",
+              "2022-01-17", "2022-07-04", "2022-09-05", "2022-11-24", "2022-10-31", "2022-12-24", "2022-12-25", "2022-12-26", "2022-12-31")
+
+```
+
+```{r}
+df_holiday <- grouped_df %>% mutate(holiday = if_else(DATE %in% ymd(holidays), 1, 0))
+df_holiday<-df_holiday%>%
+  filter(holiday==1)
+df_holiday
+```
+
+```{r}
+#Shooting Count during Holidays
+df_holiday_Shooting <- df_holiday[, c("DATE", "Shooting_Count")]
+df_holiday_Shooting <- left_join(ts,df_holiday_Shooting)
+df_holiday_Shooting <- df_holiday_Shooting%>%
+  rename(Holiday_Shooting_Count = Shooting_Count)
+df_holiday_Shooting
+```
+
+```{r}
+#Crime Count during Holidays
+df_holiday_Crime <- df_holiday[, c("DATE", "Crime_Count")]
+df_holiday_Crime <- left_join(ts,df_holiday_Crime)
+df_holiday_Crime <- df_holiday_Crime%>%
+  rename(Holiday_Crime_Count = Crime_Count)
+df_holiday_Crime
+```
+
+```{r}
+# create the plot
+ggplot(df_holiday_Shooting, aes(x = DATE, y = Holiday_Shooting_Count, fill = factor(year(DATE)))) + 
+  geom_bar(stat = "identity", width = 0.5, color = "red") +
+  theme_minimal() +
+  labs(title = "Shooting Count on Holidays and Major Events in Boston",
+       x = "Holidays", y = "Count of Shooting Cases")
+
+```
+
+```{r}
+# create the plot
+ggplot(df_holiday_Crime, aes(x = DATE, y = Holiday_Crime_Count, fill = factor(year(DATE)))) + 
+  geom_bar(stat = "identity", width = 0.5, color = "blue") +
+  theme_minimal() +
+  labs(title = "Crime Count on Holidays and Major Events in Boston",
+       x = "Holidays", y = "Count of Crime Cases")
+```
+
+
+```{r}
+#library(gridExtra)
+#library(ggplot2)
+#library(lubridate)
+
+df_holiday_Shooting_view <- ggplot(df_holiday_Shooting, aes(x = DATE, y = Shooting_Count, fill = factor(year(DATE)))) + 
+  geom_bar(stat = "identity", width = 0.5, color = "red") +
+  theme_minimal() +
+  labs(title = "Shooting Count on Holidays and Major Events in Boston",
+       x = "Holidays", y = "Count of Shooting Cases")
+
+grouped_df <- grouped_df %>%
+  mutate(month = format(as.Date(DATE), "%Y-%m")) 
+
+grouped_df <- grouped_df %>%
+  group_by(month) %>%
+  mutate(avg_Shooting_Count = mean(Shooting_Count, na.rm = TRUE)) %>%
+  ungroup()
+
+grouped_df <- grouped_df %>%
+  group_by(month) %>%
+  mutate(avg_Crime_Count = mean(Crime_Count, na.rm = TRUE)) %>%
+  ungroup()
+
+df_final <- grouped_df %>%
+  left_join(df_holiday_Shooting, by = "DATE")%>%
+  left_join(df_holiday_Crime, by = "DATE")
+
+df_final_shooting <- df_final[,c('DATE','avg_Shooting_Count','Holiday_Shooting_Count')]
+df_final_shooting
+
+df_final_crime <- df_final[,c('DATE','avg_Crime_Count','Holiday_Crime_Count')]
+df_final_crime
+
+```
+
+```{r}
+ggplot(df_final_shooting) + 
+  geom_col(aes(x = DATE, y = Holiday_Shooting_Count), size = 1.5, color = "lightblue", fill = "white") +
+  geom_line(aes(x = DATE, y = avg_Shooting_Count), size = 1, color="darkred", group = 1)
+```
+
+```{r}
+ggplot(df_final_crime) + 
+  geom_col(aes(x = DATE, y = Holiday_Crime_Count), size = 1.5, color = "lightgreen", fill = "white") +
+  geom_line(aes(x = DATE, y = avg_Crime_Count), size = 1, color="orange", group = 1)
+```
+
+
+
+
+
+
+
+
+
+
+
+Research Question 3: Is there a significant association between the occurrence of shooting incidents and different district locations and hour ranges of incidents?
+```{r}
+#rerun the dataset
+df = read.csv('/Users/wushuyan/Desktop/Boston Incidents.csv')
+```
+
+```{r}
+# Create a column values for column 'Shooting'
+df$SHOOTING_OR_NO <- ifelse(df$SHOOTING == "Shooting reported", 1, 0)
+sum(df$SHOOTING_OR_NO)
+```
+
+```{r}
+#library(caret)
+
+offense_shooting <- df[, c('OFFENSE_CODE_GROUP', 'DISTRICT_NAME', 'HOUR_RANGE', 'SHOOTING_OR_NO')]
+head(offense_shooting)
+
+mylogit <- glm(SHOOTING_OR_NO ~ DISTRICT_NAME + HOUR_RANGE, data = offense_shooting, family = "binomial")
+
+summary(mylogit)
+# Print the coefficients
+```
+
+
+
+
+
+
+
+
+
+Research Question 4: Are there certain types of incident that tend to occur together with specific time or location of Boston?
+## Read data
+```{r}
+#library(dplyr)
+#library(readxl)
+#library(ggplot2)
+#library(dplyr)
+#library(dplyr)
+#library(stringr)
+#library(arules)
+#library(arulesViz)
+#library(RColorBrewer)
+#re-read dataset
+df=read.csv('/Users/wushuyan/Desktop/Boston Incidents.csv')
+df <- df %>% mutate(IND = as.character(DATE))
+df$IND <- substring(df$IND, 1, 15)
+df$OFFENSE_NAME <- sub(",.*", "", df$OFFENSE_NAME)
+df <- group_by(df, IND)
+```
+
+
+## Prepare the Data
+```{r}
+df = df[complete.cases(df), ]
+df$DATE = as.Date(df$DATE,format = "%m/%d/%Y")
+df$OFFENSE_NAME = as.factor(df$OFFENSE_NAME)
+baskets = df %>%
+  arrange(desc(IND))%>%
+  mutate(OFFENSE_NAME = str_to_title(OFFENSE_NAME))%>%
+  group_by(IND,DATE)%>%
+  summarise(OFFENSE_TYPE = paste(OFFENSE_NAME,collapse=','), .groups = 'drop')
+baskets$DATE=NULL
+baskets$date=NULL
+write.csv(baskets,'baskets6.csv',quote = F,row.names = F)
+```
+
+## Read Clean Data
+
+
+```{r}
+items = read.transactions('baskets6.csv', format = 'basket', sep=',',skip=1)
+items
+rules1 = apriori(items,parameter = list(support = 0.001, confidence = 0.05))
+```
+
+
+## Examine top 15 items with support>0.04-only itemsets that appear in at least 4% of the transactions
+```{r}
+itemFrequencyPlot(items, support = 0.04, cex.names=0.8, 
+                  type = "relative", horiz = TRUE, col = "steelblue", las = 1,topN=15,
+                  xlab = paste("Proportion of Market Baskets Containing Item",
+                               "\n(Item Relative Frequency or Support)"))
+```
+
+## Visualize association rules
+```{r}
+plot(rules1,method='scatterplot',measure=c('support','confidence'),
+     control=list(jitter=0, col = rev(brewer.pal(9, "Greens")[4:9])),shading = "lift")
+```
+
+## Grouped matrix of rules
+```{r, fig.width=10, fig.height=6}
+plot(rules1, method="grouped",control=list(col = rev(brewer.pal(9, "Greens")[4:9])))
+```
+
+## Visualize plot for relationship between district and offense type
+# Delet both "Unspecied" and "Others" reason of crime in the data
+```{r}
+crime = names(sort(table(df$OFFENSE_CODE_GROUP), decreasing = TRUE))
+boston_clean = crime[!(grepl("Unspecified", crime) | grepl("Other", crime))]
+df_crime = subset(df, OFFENSE_CODE_GROUP %in% boston_clean)
+df_crime
+```
+
+## Frequency of crime type with district
+```{r}
+freq_district_table = table(df_crime$DISTRICT_NAME, df_crime$OFFENSE_CODE_GROUP)
+frequency_dis = as.data.frame(freq_district_table)
+# Drop the crime type wit low frequency
+frequency_dis = frequency_dis[frequency_dis$Freq >= 300, ]
+frequency_dis
+```
+# Finds out what kind of crime are most frequent
+```{r}
+top_1 <- frequency_dis %>%
+  group_by(Var1) %>%
+  top_n(1, Freq) %>%
+  arrange(Var1, desc(Freq))
+top_1
+#Larceny exists in almost every district with highest frequency
+```
+
+## Heatmap of crime type
+```{r heatmap fig.height=8, fig.width=6}
+ggplot(frequency_dis, aes(x = Var2, y = Var1)) +
+  geom_tile(aes(fill = Freq)) +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(x = "Crime Type", y = "District", fill = "Frequency") +
+  ggtitle("Heatmap of Crime Type Frequency by District") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1, size = 8))
+
+```
+
+
+## Find top 10 crime type 
+```{r}
+top_crime = names(sort(table(df_crime$OFFENSE_CODE_GROUP), decreasing = TRUE))[1:10]
+top_crime
+```
+
+## Frequency of diiferent crime type in each district
+```{r}
+freq_table = table(df_crime$DISTRICT_NAME, df_crime$OFFENSE_CODE_GROUP)
+frequency = as.data.frame(freq_table)
+frequency
+```
+
+
+## Visualize relationship between district and crime type
+```{r}
+top_crime = frequency %>% group_by(Var1) %>%
+top_n(5, Freq) %>%
+ungroup() 
+```
+
+```{r}
+ggplot(top_crime, aes(x=Var1, y=Freq, fill=Var2)) +
+geom_bar(stat="identity", position="dodge") +
+scale_fill_brewer() +
+labs(x="District", y="Frequency", title=" Top 5 Most Frequent Crime in each District ") +
+theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+scale_y_continuous()
+```
+
+
+
+
+
+
+
+
+
+
+
+
